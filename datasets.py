@@ -8,9 +8,28 @@ import random
 import process_utils
 import matplotlib.pyplot as plt
 
+class ecgCheckset(Dataset):
+    def __init__(self):
+        self.data = h5py.File("check.hdf5", "r")
+        self.len = len(self.data["name"])
+        
+    def __getitem__(self, item):
+        prepared_data = np.array(self.data["data"][item])
+        data = torch.from_numpy(prepared_data)
+        # print(self.data["name"][item])
+        name = self.data["name"][item]
+
+        return data, name
+    
+    def __len__(self):
+        return self.len
+
+    def __del__(self):
+        self.data.close()
+
 class ecgTestset(Dataset):
-    def __init__(self, hdf5Path):
-        self.data = h5py.File(hdf5Path, "r")
+    def __init__(self,path):
+        self.data = h5py.File(path, "r")
         self.len = len(self.data["labels"])
         
     def __getitem__(self, item):
@@ -31,26 +50,32 @@ class ecgDataset(Dataset):
         self.isTrain = isTrain
         self.data = h5py.File(hdf5Path, "r")
         self.len = len(self.data["labels"])
-        self.shift = shift
+        if isTrain and "7500" in hdf5Path:
+            self.shift = True
+        else:
+            self.shift = False 
         self.isSub = Sub
         if self.isSub:
             self.avg = torch.from_numpy(ecg_avg(self.data))
         
     def __getitem__(self, item):
+        prepared_data = np.array(self.data["data"][item])
+        data = torch.from_numpy(prepared_data)
+        label = torch.from_numpy(self.data["labels"][item])
         if self.isTrain:
-            prepared_data = np.array(self.data["data"][item])
-            data = torch.from_numpy(prepared_data)
-            label = torch.from_numpy(self.data["labels"][item])
+            scale = random.randint(80,120) / 100
+            data = data * scale
             if self.shift:
                 shift = random.randint(0,1000)
                 data_shift = torch.zeros((12,7500))
                 data_shift[:,shift:] = data[:,0:(7500-shift)]
                 data_shift[:,0:shift] = data[:,(7500-shift):]
-                data = data_shift
-        else:
-            prepared_data = np.array(self.data["data"][item])
-            data = torch.from_numpy(prepared_data)
-            label = torch.from_numpy(self.data["labels"][item])
+                data = data_shift * scale
+        # else:
+            # scale = torch.randint(70,130) / 100
+            # prepared_data = np.array(self.data["data"][item]) * scale
+            # data = torch.from_numpy(prepared_data)
+            # label = torch.from_numpy(self.data["labels"][item])
         if self.isSub:
             # plt.title(label)
             # plt.plot(np.arange(0,250),data[0],c='g')
@@ -102,15 +127,27 @@ def ecg_avg(data: h5py.File) -> np.array:
     return avg
 
 if __name__ == "__main__":
-    d = ecgDataset("./train-250-balanced.hdf5", isTrain=False, isAvg=True)
-    train_loader = DataLoader(dataset=d, batch_size=1, shuffle=True, drop_last=True)
+    d = ecgDataset("./train-7500-ori.hdf5", isTrain=False)
+    d2 = ecgDataset("./train-7500-ori.hdf5", isTrain=True)
+    train_loader = DataLoader(dataset=d, batch_size=1, shuffle=False, drop_last=True)
+    train_loader2 = DataLoader(dataset=d2, batch_size=1, shuffle=False, drop_last=True)
     for i, data in enumerate(train_loader):
         ecg, label = data
         ecg = ecg[0]
+        print(ecg.shape)
         # 12 7500
-        time = np.arange(0,250)
+        time = np.arange(0,7500)
         
         # plt.title(label[0])
-        # for c in ecg:
-        #     plt.plot(time,c)
-        # plt.show()
+        for c in ecg:
+            print(c.shape)
+            plt.plot(time,c)
+            break
+        for i, data in enumerate(train_loader2):
+            ecg, label = data
+            ecg = ecg[0]
+            for c in ecg:
+                plt.plot(time,c)
+                break
+            break
+        plt.show()

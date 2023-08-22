@@ -1,5 +1,5 @@
 import os
-
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -56,16 +56,18 @@ def train(args):
 
     # weight=torch.from_numpy(np.array([20,20,1])).float()
     # weight = torch.from_numpy(np.array([0.5, 0.5, 1])).float()
+    
     weight = torch.from_numpy(np.array([1, 1, 0.1])).float()
-    criterion = nn.MultiLabelSoftMarginLoss(weight,reduction="mean")
+    criterion = nn.MultiLabelSoftMarginLoss(weight)
+    # criterion = nn.CrossEntropyLoss(weight)
     # criterion = nn.BCEWithLogitsLoss(weight,reduction="mean")
 
     # criterion = nn.MSELoss()
     # criterion = multilabel_categorical_crossentropy
     criterion.to(device)
     # ,lr=0.0001, momentum=0.9
-    optimizer = optim.NAdam(network.parameters())
-    # optimizer = optim.SGD(network.parameters(),lr=0.0005,momentum=0.9)
+    # optimizer = optim.NAdam(network.parameters())
+    optimizer = optim.SGD(network.parameters(),lr=0.009,momentum=0.9)
 
     epoch = 0
     num_print = 0
@@ -82,6 +84,11 @@ def train(args):
             # labels = labels[:,:2]
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = network(inputs)
+            # print(outputs.shape)
+            # r = torch.zeros((64,3)).to(device)
+            # r[:,:-1] = outputs
+            # r[:,-1] = torch.multiply(1-outputs[:,0],1-outputs[:,1])
+            # outputs = r
             # print(outputs[0])
             # print(outputs.shape)
             # print(labels.shape)
@@ -112,7 +119,7 @@ def train(args):
                 running_loss = 0
         
 
-        if epoch % 2 == 0:
+        if epoch % 1 == 0:
             print("saving model...")
             torch.save(network.state_dict(), model_path)
             
@@ -140,168 +147,6 @@ def train(args):
     print("fin")
 
 @torch.no_grad()
-def vali(network, criterion, val_loader, device, cfg, args, train_loss, val_loss, val_acc, loss_avg, mark=""):
-    total_loss = []
-    print("validating...",mark)
-    predict_mat = []
-    label_mat = []
-    for _, v_data in enumerate(val_loader):
-        inputs, labels = v_data
-        # inputs = inputs[:,:,2,3:73].squeeze()
-        inputs, labels = inputs.to(device), labels.to(device)
-        # labels = labels[:,:2]
-        outputs = network(inputs)
-        # testy = network(testx)
-        v_loss = criterion(outputs, labels.float())
-
-        v_loss = v_loss.item()
-        # outputs = F.sigmoid(outputs)
-        total_loss.append(v_loss)
-
-        predict_mat.extend(F.sigmoid(outputs))
-        label_mat.extend(labels)
-
-    # testx = Variable(torch.ones((32,12,150)).cuda(),requires_grad=True)
-    # testy = network(testx)
-    this_loss = np.mean(total_loss)
-    val_loss.append(this_loss)
-    train_loss.append(loss_avg)
-
-    # for idx,pred in enumerate(predict_mat):
-    #     predict_mat[idx] = (pred - torch.min(pred)) / (torch.max(pred) - torch.min(pred))
-
-    # ac = pacc(predict_mat, label_mat)
-    # print(f"acc: {ac}")
-    # val_acc.append(ac)
-    x = np.arange(0, len(val_loss))
-    # plt.figure()
-    # plt.xlim(0,5)
-    # plt.ylim(0,1.5)
-    plt.plot(x, train_loss, color="r", label="train loss")
-    plt.plot(x, val_loss, color="b", label="val loss")
-    # plt.plot(x, [a for a in val_acc], color="g", label="val acc")
-    plt.legend(loc="upper left", bbox_to_anchor=(0, 1.0))
-    plt.savefig(f"./results/{cfg.network}-loss.jpg")
-    plt.cla()
-    # predict_mat
-
-    score1 = auprc(predict_mat, label_mat, 0, cfg)
-    score2 = auprc(predict_mat, label_mat, 1, cfg)
-    score3 = auprc(predict_mat, label_mat, 2, cfg)
-
-    # pred = np.array([x.cpu().numpy() for x in predict_mat])
-    # truth = np.array([x.cpu().numpy() for x in label_mat])
-    # f1 = f1_score(y_true=pred, y_pred=truth,average="weighted")
-
-    # acc = pacc(predict_mat, label_mat)
-
-    # count11 = 0
-    # count22 = 0
-    # count33 = 0
-    # for l in label_mat:
-    #     if l[0] == 1:
-    #         count11 += 1
-    #     if l[1] == 1:
-    #         count22 += 1
-    #     if l[2] == 1:
-    #         count33 += 1
-    print(f"loss: {this_loss}")
-
-    print(f"score1: {score1}")
-    print(f"score2: {score2}")
-    print(f"score3: {score3}")
-    # print(f"count11:{count11} count22:{count22} count33:{count33}")
-    for idx_label, label in enumerate(label_mat):
-        if label[0] == 1 or label[1] == 1:
-            print(f"label:\t {[label.item() for label in label_mat[idx_label]]}")
-            print(f"pred:\t {[pred.item() for pred in predict_mat[idx_label]]}")
-            break
-    try:
-        print(f"weight: {F.softmax(network.weight, dim=-1)}")
-    except AttributeError:
-        pass
-
-    # if args.set in ["balanced-150", "250-balanced"]:
-    #     try:
-    #         at = (
-    #             network.attentioned
-    #             .cpu()
-    #             .numpy()
-    #         )
-    #         ecg = inputs[0].cpu().numpy()
-    #         # ecg[30:80] = 0
-    #         plt.gray()
-    #         plt.imshow(at[0])
-    #         plt.savefig(f"./results/{cfg.network}-attention.jpg")
-    #         plt.cla()
-    #         plt.title(labels[0])
-    #         for c in ecg:
-    #             plt.plot(np.arange(0, 250), c)
-    #         # (at[0][0]-np.min(at[0][0]))/(np.max(at[0][0]-np.min(at[0][0])))*100
-    #         for a in at[0]:
-    #             plt.plot(np.arange(0, 250), a*100, color="r")
-    #         # print(at[0] * 100)
-    #         plt.savefig(f"./results/{cfg.network}-attention2.jpg")
-    #         plt.cla()
-    #     except AttributeError:
-    #         pass
-
-# @torch.no_grad()
-# def test(cfg, ctx, maxEpoch, test_loader=None):
-#     assert test_loader is not None
-#     device = torch.device("cuda:" + ctx if torch.cuda.is_available() else "cpu")
-#     print("testing ", cfg.network)
-#     maxEpoch = str(maxEpoch)
-#     model_path = (
-#         "./models/" + cfg.network + "/" + maxEpoch + "/model" + ".pth"
-#     )
-#     network = get_model(cfg)
-
-#     # network.load_state_dict(torch.load(model_path))
-#     network.load_state_dict(
-#         {k.replace("_orig_mod.", ""): v for k, v in torch.load(model_path).items()}
-#     )
-
-#     network.eval().to(device)
-
-#     # net_combine = cfg.network.split("_")
-
-#     criterion = nn.BCEWithLogitsLoss()
-
-#     with torch.no_grad():
-#         test_loss = 0.0
-
-#         predict_mat = []
-#         label_mat = []
-#         for _, t_data in enumerate(test_loader):
-#             t_input, t_label = t_data
-#             # t_input = t_input[:,:,2,3:73].squeeze()
-#             t_input, t_label = t_input.to(device), t_label.to(device)
-
-#             t_outputs = network(t_input)
-#             t_loss = criterion(t_outputs, t_label.float()).item()
-#             test_loss += t_loss
-
-#             predict_mat.extend(F.sigmoid(t_outputs))
-#             label_mat.extend(t_label)
-
-#         score1 = auprc(predict_mat, label_mat, 0, cfg)
-#         score2 = auprc(predict_mat, label_mat, 1, cfg)
-#         score3 = auprc(predict_mat, label_mat, 2, cfg)
-
-#         # pred = np.array([x.cpu().numpy() for x in predict_mat])
-#         # truth = np.array([x.cpu().numpy() for x in label_mat])
-#         # f1 = f1_score(y_true=pred, y_pred=truth,average="weighted")
-#         print(f"test loss: {test_loss / len(test_loader)}")
-#         print(f"score1: {score1}")
-#         print(f"score2: {score2}")
-#         print(f"score3: {score3}")
-#         # print(f"f1: {f1}")
-#         # print("test_acc: ", test_acc / len(test_loader))
-
-
-
-@torch.no_grad()
 def valiv2(model_path,criterion, val_loader, device, cfg, marker=""):
     network = get_model(cfg, num_channel=12).to(device)
     network.load_state_dict(torch.load(model_path))
@@ -310,22 +155,29 @@ def valiv2(model_path,criterion, val_loader, device, cfg, marker=""):
     # print("validating...",mark)
     predict_mat = []
     label_mat = []
+    time1 = time.time()
     for _, v_data in enumerate(val_loader):
         inputs, labels = v_data
         inputs, labels = inputs.to(device), labels.to(device)
         outputs = network(inputs)
+        # r = torch.zeros((64,3)).to(device)
+        # r[:,:-1] = outputs
+        # r[:,-1] = torch.multiply(1-outputs[:,0],1-outputs[:,1])
+        # outputs = r
+        
         v_loss = criterion(outputs, labels.float())
         v_loss = v_loss.item()
         total_loss.append(v_loss)
 
         predict_mat.extend(F.sigmoid(outputs))
         label_mat.extend(labels)
-
+    time2 = time.time()
+    time_cost = (time2 - time1) * 1000
     this_loss = np.mean(total_loss)
-
+    print(f"total time: {time_cost}\t time_per_sample: {time_cost / len(val_loader)}")
     # for idx,pred in enumerate(predict_mat):
     #     predict_mat[idx] = (pred - torch.min(pred)) / (torch.max(pred) - torch.min(pred))
-
+    # print(predict_mat[0],label_mat[0])
     score1 = auprc(predict_mat, label_mat, 0, cfg,marker)
     score2 = auprc(predict_mat, label_mat, 1, cfg,marker)
     score3 = auprc(predict_mat, label_mat, 2, cfg,marker)
@@ -422,7 +274,7 @@ if __name__ == "__main__":
     parser.add_argument("--maxEpoch", default=200, type=int, help="max epoch num")
     parser.add_argument("--resume", default=False, type=bool, help="continue")
     parser.add_argument(
-        "--set", default="ori-STC-balanced", type=str, help="hdf5 suffix"
+        "--set", default="250-mean", type=str, help="hdf5 suffix"
     )
 
     train(parser.parse_args())

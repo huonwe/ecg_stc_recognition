@@ -13,9 +13,9 @@ from randomModel import *
 from type3Model import *
 from model7500 import *
 from model250 import *
-from resnet import resnet50, resnet101
+from resnet import resnet18,resnet34,resnet50, resnet101
 
-from datasets import ecgDataset, ecgTestset
+from datasets import ecgDataset, ecgTestset, ecgCheckset
 from torchvision import datasets, transforms
 
 curPath = os.path.abspath(os.path.dirname(__file__))
@@ -62,22 +62,20 @@ def get_model(cfg, **kwargs):
         return Type6()
     elif cfg.network == "type7":
         return Type7()
-    elif cfg.network == "STC":
-        return STC()
     elif cfg.network == "splite":
         return Splite()
-    elif cfg.network == "resnet":
-        model = resnet50()
+    elif cfg.network == "resnet18":
+        model = resnet18()
         return model
-    elif cfg.network == "resnet101":
-        model = resnet101()
+    elif cfg.network == "resnet34":
+        model = resnet34()
         return model
-    elif cfg.network == "random":
-        return RANDOM()
     elif cfg.network == "model7500":
         return model7500()
     elif cfg.network == "model250":
         return model250()
+    elif cfg.network == "model250v2":
+        return model250v2()
     else:
         raise ValueError()
 
@@ -125,10 +123,20 @@ def prepare_data(batch_size, set:str):
 
 
 def prepare_test(batch_size):
-    dataset_test = ecgTestset("test-250-mean.hdf5")
-    print("test-250-mean.hdf5")
+    # test-250-mean.hdf5
+    dataset_test = ecgTestset("test.hdf5")
+    # print("test-250-mean.hdf5")
 
     test_loader = DataLoader(
         dataset=dataset_test, batch_size=batch_size, shuffle=True, drop_last=True
     )
     return test_loader
+
+def prepare_check(batch_size):
+    dataset_check = ecgCheckset()
+    print("check.hdf5")
+
+    check_loader = DataLoader(
+        dataset=dataset_check, batch_size=batch_size, shuffle=False, drop_last=False
+    )
+    return check_loader

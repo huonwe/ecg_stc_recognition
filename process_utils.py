@@ -40,7 +40,13 @@ def process_ecg(data, label):
     except Exception:
         print(label)
         print("1err")
-        return None
+        t_ = np.arange(t1,t2)
+        plt.title("bad seg")
+        for c in data:
+            plt.plot(np.arange(0,len(c)),c)
+            # plt.plot(t_,c[t1:t2],c="k")
+        plt.show()
+        return target_data
 
 
     # try:
@@ -96,7 +102,7 @@ def process_ecg(data, label):
     s = np.sum(temp_data,axis=0)
     if np.max(s) == 0:
         print("bad ecg with label ",label)
-        return None    
+        return target_data    
     # time = np.arange(0,250)
     # for cc in temp_data:
     #     plt.plot(time,cc)
@@ -221,6 +227,121 @@ def process_ecgv2(data, label):
 
     return new_data
 
+
+def process_ecgv3(data, label):
+    # [channel] [avg, lowest, highest] [J, JX60, JX80, [JX80_seq]]
+    new_data = np.zeros((12, 3, 73))
+    ecg_mean = np.mean(data, 0)
+    
+    # plt.show()
+    try:
+        out_mean = ecg.ecg(
+            signal=ecg_mean, sampling_rate=500, show=False, interactive=False
+        )
+        filtered_mean = out_mean['filtered']
+        filtered_ts = out_mean['ts'] * 500
+        r_pos = out_mean["rpeaks"]
+
+    except Exception:
+        print(label)
+        print("1err")
+        return None
+
+    try:
+        q_pos, q_starts = ecg.getQPositions(out_mean, show=False)
+        s_pos, s_ends = ecg.getSPositions(out_mean, show=False)
+        # p_pos, p_starts, p_ends = ecg.getPPositions(out_mean, show=True)
+
+        # t_pos, t_starts, q_ends  = ecg.getTPositions(out_mean, show=False)
+    except Exception:
+        print(label)
+        print("2err")
+        return None
+
+    # window_len = 20  # 40 ms
+    r = 10  # 20ms half, window width is 40ms
+    for c in range(0, 12):
+        if np.max(data[c]) == 0:
+            continue
+        sampling_rate = 500
+        order = int(0.3 * sampling_rate)
+        filtered_channel, _, _ = ecg.st.filter_signal(
+            signal=data[c],
+            ftype="FIR",
+            band="bandpass",
+            order=order,
+            frequency=[3, 45],
+            sampling_rate=sampling_rate,
+        )
+        # filtered_channel = singnal_fliter(data[c])
+        ST_J_Arr = []
+        ST_JX60_Arr = []
+        ST_JX80_Arr = []
+        ST_JX_Arr = []
+        
+        # time = np.arange(0, 7500)
+        # plt.plot(filtered_ts, filtered_mean, color='y', label='filtered_avg_signal')
+        # plt.plot(filtered_ts, filtered_channel, color='g', label='filtered_channel_signal')
+
+        for idx in range(0, len(r_pos)):
+            t_iso = q_starts[idx] - 110  # left shift 24ms
+            if t_iso < 0:
+                t_iso = 0
+                
+            if t_iso - 20 < 0:
+                t_iso = 20
+            iso = np.mean(filtered_mean[t_iso - 20 : t_iso + 20])
+            # print(idx,t_iso - 20 , t_iso + 20, iso)
+            t_j = s_ends[idx] - 0
+            # dj1 = filtered_channel[t_j] - filtered_channel[t_j+5]
+            # dj2 = filtered_channel[t_j+5] - filtered_channel[t_j+10]
+            
+            
+            ST_J = np.mean(filtered_channel[t_j : t_j + 5]) - iso
+            
+
+            t_jx1 = t_j + 30  # 60ms
+            t_jx2 = t_j + 40  # 80ms
+
+            ST_JX1 = np.mean(filtered_channel[t_jx1 - r : t_jx1 + r]) - iso
+            ST_JX2 = np.mean(filtered_channel[t_jx2 - r : t_jx2 + r]) - iso
+            ST_JX = filtered_channel[t_j - 10 :t_jx2 + 20] - iso
+
+            ST_J_Arr.append(ST_J)
+            ST_JX60_Arr.append(ST_JX1)
+            ST_JX80_Arr.append(ST_JX2)
+            ST_JX_Arr.append(ST_JX)
+
+            # time = np.arange(t_iso - 20, t_iso + 20)
+            # plt.plot(time, filtered_mean[t_iso - 20 : t_iso + 20], color="r")
+            # time = np.arange(t_j - 10, t_jx2 + 20)
+            # plt.plot(time, ST_JX, color="r")
+        if len(ST_J_Arr) == 0:
+            print(f"channel {c+1} empty")
+            continue
+        # avg
+        new_data[c][0][0] = np.mean(ST_J_Arr)
+        new_data[c][0][1] = np.mean(ST_JX60_Arr)
+        new_data[c][0][2] = np.mean(ST_JX80_Arr)
+        new_data[c][0][3:] = np.mean(ST_JX_Arr, axis=0)
+        # lowest
+        new_data[c][1][0] = np.min(ST_J_Arr)
+        new_data[c][1][1] = np.min(ST_JX60_Arr)
+        new_data[c][1][2] = np.min(ST_JX80_Arr)
+        arg = np.argmin(np.mean(ST_JX_Arr, axis=1))
+        new_data[c][1][3:] = ST_JX_Arr[arg]
+        # higest
+        new_data[c][2][0] = np.min(ST_J_Arr)
+        new_data[c][2][1] = np.min(ST_JX60_Arr)
+        new_data[c][2][2] = np.min(ST_JX80_Arr)
+        arg = np.argmax(np.mean(ST_JX_Arr, axis=1))
+        new_data[c][2][3:] = ST_JX_Arr[arg]
+
+        # plt.legend(loc='upper left', bbox_to_anchor=(0, 1.0))
+        # plt.title(f'channel {c+1}    label: {label}')
+        # plt.show()
+
+    return new_data
 
 if __name__ == "__main__":
     from datasets import ecgDataset

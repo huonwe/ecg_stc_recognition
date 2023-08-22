@@ -94,33 +94,38 @@ class CNN_(nn.Module):
 class model7500(nn.Module):
     def __init__(self):
         super(model7500, self).__init__()
-        self.resnet = resnet50()
-        # self.lstm = nn.LSTM(
-        #     input_size=12, hidden_size=24, num_layers=3,
-        #     dropout=0.3
-        # )
-        # self.fc1 = nn.Linear(24*250,250)
-        # self.fc2 = nn.Linear(250, 3)
+        self.resnet = resnet18()
+        self.lstm = nn.LSTM(
+            input_size=12, hidden_size=12, num_layers=3,
+            dropout=0.3
+        )
+        self.fc1 = nn.Linear(12*7500,3)
         # self.at0 = nn.MultiheadAttention(12,4,dropout=0.5)
-        # self.at = nn.MultiheadAttention(24,2,dropout=0.5)
+        self.dp = nn.Dropout(p=0.5)
     def forward(self, x):
-        # x1,_ = self.at0(x.permute(2,0,1),x.permute(2,0,1),x.permute(2,0,1))
-        
-        # # x1 = x.permute(2,0,1)
-        # x1,_ = self.lstm(x1)
+        # x = self.dp(x)
 
-        # x1,_ = self.at(x1,x1,x1)
-        # self.attentioned = x1.permute(1,2,0)
-        # x1 = torch.flatten(x1.permute(1,2,0),start_dim=1)
-        # x1 = F.relu(self.fc1(x1))
-        # x1 = self.fc2(x1)
+        x1,_ = self.lstm(x.permute(2,0,1))
+        self.attentioned = x1.permute(1,2,0)
+        x1 = torch.flatten(x1.permute(1,2,0),start_dim=1)
+        x1 = self.fc1(x1)
+        
         x3 = self.resnet(x)
         
-        mix = x3
+        mix = x3 + x1
         # batch_size, 3
         # print(mix_min.shape)
-        min_v, _ = torch.max(mix[:,:2],dim=-1)
-        mix[:,2] -= min_v
+        # min_v, _ = torch.max(mix[:,:2],dim=-1)
+        # mix[:,2] -= min_v
         
         
         return mix
+
+
+class dp(nn.Module):
+    def __init__(self):
+        super(dp, self).__init__()
+        self.dp = nn.Dropout(p=0.8)
+    def forward(self, x):
+        x = self.dp(x)
+        return x

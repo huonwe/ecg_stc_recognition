@@ -47,11 +47,11 @@ class ATI_CNN(nn.Module):
         self.bn13 = nn.BatchNorm1d(512)
         
         self.lstm = nn.LSTM(
-            input_size=512, hidden_size=32, num_layers=2, batch_first=True,
+            input_size=512, hidden_size=32, num_layers=2,
             dropout=0.2
         )
-        self.fc1 = nn.Linear(32*15,3)
-        self.attention = SelfAttention(2,32,32,0.1)
+        self.fc1 = nn.Linear(30*32,3)
+        self.attention = nn.MultiheadAttention(32,4)
         # self.attention0 = SelfAttention(2,7500,7500,0.2)
     def forward(self, x):
         # x = self.attention0(x)
@@ -86,12 +86,16 @@ class ATI_CNN(nn.Module):
         x = self.conv13(x)
         x = F.relu(self.bn13(x))
         x = self.maxpool(x)
-        
-        v, _ = self.lstm(x.permute(0,2,1))
-        attention_out = self.attention(v)
+        # print(x.shape)
+        v, _ = self.lstm(x.permute(2,0,1))
+        # print(v.shape)
+        attention_out,_ = self.attention(v,v,v)
         # print(attention_out.shape)
-        x = self.fc1(attention_out.reshape(-1,32*15))
-        x = F.sigmoid(x)
+        x = torch.flatten(attention_out.permute(1,0,2),start_dim=1)
+        # print(x.shape)
+        x = self.fc1(x)
+        # x = F.sigmoid(x)
+        # print(x.shape)
         return x
     def initialize(self):
         for m in self.modules():
@@ -101,9 +105,6 @@ class ATI_CNN(nn.Module):
                 for name, param in m.named_parameters():
                     if name.startswith("weight"):
                         nn.init.orthogonal_(param)
-                    else:
-                        nn.init.zeros_(param)
-
 
 
 

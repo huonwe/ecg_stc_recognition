@@ -13,23 +13,23 @@ class HDF5DatasetWriter:
         assert dims != None and outputPath != None
         self.db = h5py.File(outputPath, "w")
         self.data = self.db.create_dataset("data", dims, dtype="float32")
-        self.labels = self.db.create_dataset("labels", [dims[0],3], dtype="int")
+        self.name = self.db.create_dataset("name", [dims[0]], dtype="int")
         self.bufSize = bufSize
-        self.buffer = {"data": [], "labels": []}
+        self.buffer = {"data": [], "name": []}
         self.idx = 0  # 用来进行计数
 
-    def add(self, rows, labels):
+    def add(self, rows, name):
         self.buffer["data"].extend([rows])
-        self.buffer["labels"].extend([labels])
+        self.buffer["name"].extend([name])
         if len(self.buffer["data"]) >= self.bufSize:
             self.flush()
 
     def flush(self):
         i = self.idx + len(self.buffer["data"])
         self.data[self.idx:i] = self.buffer["data"]
-        self.labels[self.idx:i] = self.buffer["labels"]
+        self.name[self.idx:i] = self.buffer["name"]
         self.idx = i
-        self.buffer = {"data": [], "labels": []}
+        self.buffer = {"data": [], "name": []}
 
     def close(self):
         if len(self.buffer["data"]) > 0:
@@ -39,18 +39,20 @@ class HDF5DatasetWriter:
 
 if __name__ =='__main__':
     index = 0
-    TestWriter = HDF5DatasetWriter(dims=[1000,12,250],outputPath='./test-250-mean.hdf5')
+    TestWriter = HDF5DatasetWriter(dims=[2000,12,250],outputPath='./check-250-mean.hdf5')
     # df = pd.read_excel("./data/Train.xlsx","Sheet1")
-    ecgs = h5py.File("test.hdf5", "r")
+    ecgs = h5py.File("check.hdf5", "r")
     try:
-        for i, ecg_label in enumerate(ecgs["labels"]):
+        for i, name in enumerate(ecgs["name"]):
             index += 1
             ecg = ecgs["data"][i]
-            new_data = process_ecg(ecg, ecg_label)
-            # if type(new_data) == type(None):
-            #     print("ERR TO PROCESS ",i)
-            #     continue
-            TestWriter.add(new_data,ecg_label)
+            new_data = process_ecg(ecg, name)
+            if type(new_data) == type(None):
+                print("ERR TO PROCESS ",i)
+                continue
+            TestWriter.add(new_data,name)
+            if i % 50 == 0:
+                print(i)
     finally:
         TestWriter.close()
         print(index)
